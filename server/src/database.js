@@ -1,4 +1,5 @@
 // Data goes here.
+//already done in wkshp6
 var initialData = {
   // The "user" collection. Contains all of the users in our Facebook system.
   "users": {
