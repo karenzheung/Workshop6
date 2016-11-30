@@ -4,6 +4,7 @@ var database = require('./database');
 var express = require('express');
 var readDocument = database.readDocument;
 var StatusUpdateSchema = require('./schemas/statusupdate.json');
+var CommentSchema = require('./schemas/comment.json');
 var validate = require('express-jsonschema').validate;
 var writeDocument = database.writeDocument;
 var addDocument = database.addDocument;
@@ -300,6 +301,70 @@ app.post('/feeditem',
           res.status(400).end();
         }
       });
+
+// post comments
+app.put('/feeditem/:feeditemid/comments', validate({ body: CommentSchema}), function(req, res) {
+  var fromUser = getUserIdFromToken(req.get('Authorization'));
+  var body = req.body;
+  var feedItemId = parseInt(req.params.feeditemid, 10);
+  if (fromUser === body.author) {
+    var feedItem = readDocument("feedItems", feedItemId);
+    var newComment = {
+      "author": body.author,
+      "contents": body.contents,
+      "postDate": new Date().getTime(),
+      "likeCounter": []
+    }
+    feedItem.comments.push(newComment);
+    writeDocument("feedItems", feedItem);
+    res.status(201);
+    res.send(getFeedItemSync(feedItemId));
+  } else {
+    res.status(401).end();
+  }
+});
+
+// like comments
+app.put('/feeditem/:feeditemid/:commentIdx/:userid', function(req, res) {
+  var fromUser = getUserIdFromToken(req.get('Authorization'));
+  var feedItemId = parseInt(req.params.feeditemid, 10);
+  var userId = parseInt(req.params.userid, 10);
+  var commentIdx = parseInt(req.params.commentIdx, 10);
+  if(fromUser === userId) {
+    var feedItem = readDocument("feedItems", feedItemId);
+    //console.log(feedItem);
+    var comment = feedItem.comments[commentIdx];
+    comment.likeCounter.push(userId);
+    writeDocument("feedItems", feedItem);
+    comment.author = readDocument("users", comment.author);
+    res.status(201);
+    res.send(comment);
+  } else {
+    res.status(401).end();
+  }
+});
+
+// unlike comments
+app.delete('/feeditem/:feeditemid/:commentIdx/:userid',function(req,res) {
+  var fromUser = getUserIdFromToken(req.get('Authorization'));
+  var feedItemId = parseInt(req.params.feeditemid,10);
+  var userId = parseInt(req.params.userid,10);
+  var commentIdx = parseInt(req.params.commentIdx,10);
+  if (fromUser === userId) {
+    var feedItem = readDocument("feedItems",feedItemId);
+    var comment = feedItem.comments[commentIdx];
+    var userIndex = comment.likeCounter.indexOf(userId);
+    if (userIndex !== -1) {
+      comment.likeCounter.splice(userIndex, 1);
+      writeDocument("feedItems", feedItem);
+    }
+    comment.author = readDocument("users", comment.author);
+    res.status(201);
+    res.send(comment);
+  }else {
+    res.status(401).end();
+  }
+});
 
 /**
  * Translate JSON Schema Validation failures into error 400s.
